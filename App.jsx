@@ -1,173 +1,679 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  LayoutDashboard, CalendarDays, Users, Clock3, CalendarCheck, Repeat2,
-  Megaphone, FileText, BarChart3, Settings, Bell, Search, Plus, MapPin,
-  ChevronRight, LogOut, BriefcaseBusiness, UserRoundCheck, Timer, Coffee
+  LayoutDashboard,
+  CalendarDays,
+  Users,
+  Clock3,
+  CalendarCheck,
+  Repeat2,
+  Megaphone,
+  FileText,
+  BarChart3,
+  Settings,
+  Bell,
+  Search,
+  Plus,
+  MapPin,
+  LogOut,
+  BriefcaseBusiness,
+  Coffee,
+  Eye,
+  EyeOff,
+  Loader2,
 } from "lucide-react";
 
-const people = [
-  { name: "Fakhir", role: "Employee", shift: "Opening", status: "Clocked in" },
-  { name: "Ayesha", role: "Employee", shift: "Middle", status: "Scheduled" },
-  { name: "Hamza", role: "Employee", shift: "Closing", status: "Scheduled" },
-  { name: "Shahnawaz", role: "Admin", shift: "Management", status: "Online" },
+import { supabase } from "./supabase.js";
+
+const navigation = [
+  ["Dashboard", LayoutDashboard],
+  ["Rota", CalendarDays],
+  ["Employees", Users],
+  ["Availability", CalendarCheck],
+  ["Leave", Coffee],
+  ["Shift swaps", Repeat2],
+  ["Timesheets", Clock3],
+  ["Announcements", Megaphone],
+  ["Documents", FileText],
+  ["Reports", BarChart3],
+  ["Settings", Settings],
 ];
 
-const rota = [
-  { day:"Mon", date:"17", label:"Opening", time:"05:30 – 14:00", person:"Fakhir" },
-  { day:"Tue", date:"18", label:"Middle", time:"12:00 – 17:00", person:"Ayesha" },
-  { day:"Wed", date:"19", label:"Closing", time:"15:00 – 23:00", person:"Hamza" },
-  { day:"Thu", date:"20", label:"Opening", time:"05:30 – 14:00", person:"Fakhir" },
-];
+function Login() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
-const nav = [
-  ["Dashboard", LayoutDashboard], ["Rota", CalendarDays], ["Employees", Users],
-  ["Availability", CalendarCheck], ["Leave", Coffee], ["Shift swaps", Repeat2],
-  ["Timesheets", Clock3], ["Announcements", Megaphone], ["Documents", FileText],
-  ["Reports", BarChart3], ["Settings", Settings],
-];
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-function Card({children, className=""}) {
-  return <section className={`glass card ${className}`}>{children}</section>;
+  async function login(e) {
+    e.preventDefault();
+
+    setLoading(true);
+    setError("");
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setError(error.message);
+    }
+
+    setLoading(false);
+  }
+
+  return (
+    <div className="loginPage">
+      <div className="loginGlow loginGlowOne"></div>
+      <div className="loginGlow loginGlowTwo"></div>
+
+      <div className="loginCard glass">
+        <div className="loginLogo">O</div>
+
+        <div className="loginIntro">
+          <span>OMED</span>
+
+          <h1>Welcome back.</h1>
+
+          <p>Sign in to your workplace.</p>
+        </div>
+
+        <form onSubmit={login} className="loginForm">
+          <label>
+            Email
+
+            <input
+              type="email"
+              value={email}
+              placeholder="you@company.com"
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </label>
+
+          <label>
+            Password
+
+            <div className="passwordField">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                placeholder="Enter your password"
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <EyeOff size={17} />
+                ) : (
+                  <Eye size={17} />
+                )}
+              </button>
+            </div>
+          </label>
+
+          {error && (
+            <div className="loginError">
+              {error}
+            </div>
+          )}
+
+          <button
+            className="loginSubmit"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 size={17} className="spin" />
+                Signing in...
+              </>
+            ) : (
+              "Sign in"
+            )}
+          </button>
+        </form>
+
+        <div className="loginBottom">
+          No public signup · Accounts are created by your company
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Loading() {
+  return (
+    <div className="loadingPage">
+      <div className="loginLogo">O</div>
+      <Loader2 size={25} className="spin" />
+    </div>
+  );
 }
 
 function App() {
-  const [page, setPage] = useState("Dashboard");
-  const [role, setRole] = useState("Admin");
-  const [notice, setNotice] = useState("");
-  const today = useMemo(() => "Monday, 17 August", []);
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
 
-  const action = (text) => {
-    setNotice(text);
-    setTimeout(() => setNotice(""), 2300);
+  const [page, setPage] = useState("Dashboard");
+
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function start() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      setSession(session);
+
+      if (session) {
+        await loadProfile(session.user.id);
+      }
+
+      setLoading(false);
+    }
+
+    start();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      async (_event, newSession) => {
+        setSession(newSession);
+
+        if (newSession) {
+          setLoading(true);
+
+          await loadProfile(
+            newSession.user.id
+          );
+
+          setLoading(false);
+        } else {
+          setProfile(null);
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function loadProfile(userId) {
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("profiles")
+      .select(`
+        id,
+        full_name,
+        role,
+        company_id,
+        location_id,
+        companies (
+          name
+        ),
+        locations (
+          name
+        )
+      `)
+      .eq("id", userId)
+      .single();
+
+    if (error) {
+      console.error(
+        "Profile error:",
+        error
+      );
+
+      setProfile(null);
+
+      return;
+    }
+
+    setProfile(data);
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut();
+  }
+
+  if (loading) {
+    return <Loading />;
+  }
+
+  if (!session) {
+    return <Login />;
+  }
+
+  if (!profile) {
+    return (
+      <div className="loadingPage">
+        <div className="glass accountProblem">
+          <h2>Account needs setup</h2>
+
+          <p>
+            Your login works, but your Omed profile has not been
+            assigned to a company yet.
+          </p>
+
+          <button
+            className="primary"
+            onClick={signOut}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const roleName = {
+    admin: "Admin",
+    area_manager: "Area Manager",
+    store_manager: "Store Manager",
+    employee: "Employee",
   };
+
+  const isManager = [
+    "admin",
+    "area_manager",
+    "store_manager",
+  ].includes(profile.role);
+
+  const name =
+    profile.full_name ||
+    session.user.email;
+
+  const companyName =
+    profile.companies?.name ||
+    "Omed";
+
+  const locationName =
+    profile.locations?.name ||
+    "No store";
 
   return (
     <div className="shell">
-      <div className="orb one"/><div className="orb two"/>
-      {notice && <div className="toast glass">{notice}</div>}
+      <div className="orb one"></div>
+      <div className="orb two"></div>
 
       <aside className="sidebar glass">
         <div className="brand">
-          <div className="logo">O</div>
-          <div><b>Omed</b><small>Workforce</small></div>
+          <div className="logo">
+            O
+          </div>
+
+          <div>
+            <b>Omed</b>
+            <small>Workforce</small>
+          </div>
         </div>
 
         <div className="company">
-          <BriefcaseBusiness size={16}/>
-          <div><b>Lamiya Limited</b><small>Main Store</small></div>
+          <BriefcaseBusiness size={16} />
+
+          <div>
+            <b>{companyName}</b>
+            <small>{locationName}</small>
+          </div>
         </div>
 
         <nav>
-          {nav.map(([name, Icon]) => (
-            <button key={name} onClick={()=>setPage(name)} className={page===name?"active":""}>
-              <Icon size={18}/><span>{name}</span>
-            </button>
-          ))}
+          {navigation.map(
+            ([label, Icon]) => {
+              if (
+                profile.role === "employee" &&
+                ["Employees", "Reports"].includes(label)
+              ) {
+                return null;
+              }
+
+              return (
+                <button
+                  key={label}
+                  onClick={() =>
+                    setPage(label)
+                  }
+                  className={
+                    page === label
+                      ? "active"
+                      : ""
+                  }
+                >
+                  <Icon size={18} />
+                  <span>{label}</span>
+                </button>
+              );
+            }
+          )}
         </nav>
 
         <div className="profile">
-          <div className="avatar">{role === "Admin" ? "S" : "F"}</div>
-          <div><b>{role === "Admin" ? "Shahnawaz" : "Fakhir"}</b><small>{role}</small></div>
-          <button className="tiny" onClick={()=>setRole(role==="Admin"?"Employee":"Admin")}>↕</button>
+          <div className="avatar">
+            {name
+              .charAt(0)
+              .toUpperCase()}
+          </div>
+
+          <div>
+            <b>{name}</b>
+
+            <small>
+              {roleName[
+                profile.role
+              ]}
+            </small>
+          </div>
+
+          <button
+            className="tiny"
+            onClick={signOut}
+          >
+            <LogOut size={15} />
+          </button>
         </div>
       </aside>
 
       <main>
         <header>
           <div>
-            <p className="kicker">{today.toUpperCase()}</p>
+            <p className="kicker">
+              {companyName.toUpperCase()}
+            </p>
+
             <h1>{page}</h1>
-            <p className="sub">{page==="Dashboard" ? `Good morning, ${role==="Admin"?"Shahnawaz":"Fakhir"}. Here’s what’s happening today.` : `Manage ${page.toLowerCase()} for Lamiya Limited.`}</p>
+
+            <p className="sub">
+              {page === "Dashboard"
+                ? `Good morning, ${name}.`
+                : `Manage ${page.toLowerCase()}.`}
+            </p>
           </div>
+
           <div className="headerActions">
-            <button className="round glass"><Search size={18}/></button>
-            <button className="round glass"><Bell size={18}/><i/></button>
-            <button className="primary" onClick={()=>action("Action panel will connect to Supabase next.")}><Plus size={17}/> New</button>
+            <button className="round glass">
+              <Search size={18} />
+            </button>
+
+            <button className="round glass">
+              <Bell size={18} />
+              <i></i>
+            </button>
+
+            {isManager && (
+              <button className="primary">
+                <Plus size={17} />
+                New
+              </button>
+            )}
           </div>
         </header>
 
-        {page === "Dashboard" ? <Dashboard action={action} role={role}/> : <Module page={page} action={action}/>}
+        {page === "Dashboard" ? (
+          <Dashboard
+            name={name}
+            isManager={isManager}
+            locationName={locationName}
+          />
+        ) : (
+          <Module
+            page={page}
+            isManager={isManager}
+          />
+        )}
       </main>
     </div>
   );
 }
 
-function Dashboard({action, role}) {
-  return <>
-    <div className="stats">
-      <Card><div className="statIcon"><Users/></div><span>Staff today</span><strong>12</strong><small>10 scheduled · 2 off</small></Card>
-      <Card><div className="statIcon"><Timer/></div><span>Scheduled hours</span><strong>86.5</strong><small>This week</small></Card>
-      <Card><div className="statIcon"><CalendarCheck/></div><span>Requests</span><strong>3</strong><small>Need attention</small></Card>
-      <Card><div className="statIcon"><MapPin/></div><span>Location</span><strong className="smallStat">Main Store</strong><small>Lamiya Limited</small></Card>
-    </div>
+function Dashboard({
+  isManager,
+  locationName,
+}) {
+  return (
+    <>
+      <div className="stats">
+        <section className="glass card">
+          <div className="statIcon">
+            <Users size={18} />
+          </div>
 
-    <div className="grid">
-      <Card className="wide">
-        <Title title="This week's rota" sub="17 – 23 August" action="View full rota" onClick={()=>action("Opening rota")}/>
-        <div className="rota">
-          {rota.map(x=><div className="rotaRow" key={x.day+x.date}>
-            <div className="date"><small>{x.day}</small><b>{x.date}</b></div>
-            <div className={`stripe ${x.label.toLowerCase()}`}/>
-            <div className="grow"><b>{x.label}</b><small>{x.time}</small></div>
-            <div className="person"><div className="miniAvatar">{x.person[0]}</div>{x.person}</div>
-            <ChevronRight size={17}/>
-          </div>)}
-        </div>
-      </Card>
+          <span>
+            {isManager
+              ? "Staff today"
+              : "Next shift"}
+          </span>
 
-      <Card>
-        <Title title="Live attendance" sub="Today"/>
-        <div className="live"><span/><b>LIVE</b></div>
-        <div className="bigNumber">8</div>
-        <p className="sub">people currently clocked in</p>
-        <div className="progress"><span/></div>
-        <div className="three"><div><small>On time</small><b>7</b></div><div><small>Late</small><b>1</b></div><div><small>Not in</small><b>2</b></div></div>
-      </Card>
+          <strong>
+            {isManager
+              ? "12"
+              : "Opening"}
+          </strong>
 
-      <Card className="wide">
-        <Title title="Team" sub="Main Store" action="Manage employees" onClick={()=>action("Opening employees")}/>
-        {people.map(p=><div className="employee" key={p.name}>
-          <div className="avatar">{p.name[0]}</div>
-          <div className="grow"><b>{p.name}</b><small>{p.role}</small></div>
-          <span className="pill">{p.shift}</span>
-          <span className="status">{p.status}</span>
-        </div>)}
-      </Card>
+          <small>
+            {isManager
+              ? "10 scheduled · 2 off"
+              : "05:30 – 14:00"}
+          </small>
+        </section>
 
-      <Card>
-        <Title title={role==="Admin"?"Requests":"My next shift"} sub={role==="Admin"?"Needs your attention":"Upcoming"}/>
-        <div className="request"><UserRoundCheck/><div className="grow"><b>{role==="Admin"?"Annual leave":"Opening"}</b><small>{role==="Admin"?"Fakhir · 24–26 Aug":"Tomorrow · 05:30–14:00"}</small></div><ChevronRight/></div>
-        <div className="request"><Repeat2/><div className="grow"><b>{role==="Admin"?"Shift swap":"Availability"}</b><small>{role==="Admin"?"Ayesha · Closing":"Update next week"}</small></div><ChevronRight/></div>
-      </Card>
-    </div>
-  </>;
+        <section className="glass card">
+          <div className="statIcon">
+            <Clock3 size={18} />
+          </div>
+
+          <span>
+            Hours this week
+          </span>
+
+          <strong>32.5</strong>
+
+          <small>Scheduled</small>
+        </section>
+
+        <section className="glass card">
+          <div className="statIcon">
+            <CalendarCheck
+              size={18}
+            />
+          </div>
+
+          <span>Requests</span>
+
+          <strong>
+            {isManager ? "3" : "0"}
+          </strong>
+
+          <small>
+            {isManager
+              ? "Need attention"
+              : "Pending"}
+          </small>
+        </section>
+
+        <section className="glass card">
+          <div className="statIcon">
+            <MapPin size={18} />
+          </div>
+
+          <span>Location</span>
+
+          <strong className="smallStat">
+            {locationName}
+          </strong>
+
+          <small>
+            Current workplace
+          </small>
+        </section>
+      </div>
+
+      <div className="grid">
+        <section className="glass card wide">
+          <div className="title">
+            <div>
+              <h3>
+                {isManager
+                  ? "This week's rota"
+                  : "My rota"}
+              </h3>
+
+              <small>
+                Opening · Middle · Closing
+              </small>
+            </div>
+          </div>
+
+          <div className="rota">
+            {[
+              ["Mon", "17", "Opening", "05:30 – 14:00"],
+              ["Tue", "18", "Middle", "12:00 – 17:00"],
+              ["Wed", "19", "Closing", "15:00 – 23:00"],
+            ].map(
+              ([day, date, shift, time]) => (
+                <div
+                  className="rotaRow"
+                  key={day}
+                >
+                  <div className="date">
+                    <small>{day}</small>
+                    <b>{date}</b>
+                  </div>
+
+                  <div
+                    className={`stripe ${shift.toLowerCase()}`}
+                  ></div>
+
+                  <div className="grow">
+                    <b>{shift}</b>
+                    <small>{time}</small>
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        </section>
+
+        <section className="glass card">
+          <div className="title">
+            <div>
+              <h3>
+                {isManager
+                  ? "Live attendance"
+                  : "Clock in"}
+              </h3>
+
+              <small>Today</small>
+            </div>
+          </div>
+
+          {isManager ? (
+            <>
+              <div className="bigNumber">
+                8
+              </div>
+
+              <p className="sub">
+                people currently clocked
+                in
+              </p>
+
+              <div className="progress">
+                <span></span>
+              </div>
+            </>
+          ) : (
+            <div className="clockPanel">
+              <Clock3 size={30} />
+
+              <h2>
+                Ready for work?
+              </h2>
+
+              <p className="sub">
+                Your clock-in button will
+                connect to Supabase next.
+              </p>
+
+              <button className="primary clockButton">
+                Clock in
+              </button>
+            </div>
+          )}
+        </section>
+      </div>
+    </>
+  );
 }
 
-function Title({title, sub, action, onClick}) {
-  return <div className="title"><div><h3>{title}</h3><small>{sub}</small></div>{action&&<button onClick={onClick}>{action}<ChevronRight size={15}/></button>}</div>;
-}
-
-function Module({page, action}) {
-  const descriptions = {
-    Rota:"Build weekly rotas using Opening, Middle and Closing shifts.",
-    Employees:"Add employees, assign roles, stores, departments and rates.",
-    Availability:"Employees can submit available, unavailable and preferred hours.",
-    Leave:"Request and approve annual leave, sickness and unpaid leave.",
-    "Shift swaps":"Request swaps, accept replacements and approve changes.",
-    Timesheets:"Review scheduled hours, clock-ins, clock-outs and attendance.",
-    Announcements:"Publish company or store announcements.",
-    Documents:"Store contracts, policies and employee documents securely.",
-    Reports:"Review staffing, attendance, overtime, absence and payroll exports.",
-    Settings:"Manage company, locations, permissions and Omed preferences."
+function Module({
+  page,
+  isManager,
+}) {
+  const text = {
+    Rota:
+      "Create and manage Opening, Middle and Closing shifts.",
+    Employees:
+      "Manage employees, managers, stores and roles.",
+    Availability:
+      "Employees can submit their availability.",
+    Leave:
+      "Request and manage annual leave and sickness.",
+    "Shift swaps":
+      "Request and approve shift swaps.",
+    Timesheets:
+      "Review clock-in and clock-out records.",
+    Announcements:
+      "Publish company and store announcements.",
+    Documents:
+      "Manage employee and company documents.",
+    Reports:
+      "View attendance and staffing reports.",
+    Settings:
+      "Manage company and Omed settings.",
   };
-  return <Card className="module">
-    <div className="moduleIcon"><CalendarDays size={30}/></div>
-    <p className="kicker">OMED MODULE</p>
-    <h2>{page}</h2>
-    <p className="sub">{descriptions[page]}</p>
-    <button className="primary" onClick={()=>action(`${page}: demo action ready`)}><Plus size={17}/> Add new</button>
-    <div className="coming"><b>UI ready</b><span>Supabase connection comes next.</span></div>
-  </Card>;
+
+  return (
+    <section className="glass card module">
+      <div className="moduleIcon">
+        <CalendarDays size={30} />
+      </div>
+
+      <p className="kicker">
+        OMED
+      </p>
+
+      <h2>{page}</h2>
+
+      <p className="sub">
+        {text[page]}
+      </p>
+
+      {isManager && (
+        <button className="primary">
+          <Plus size={17} />
+          Add new
+        </button>
+      )}
+
+      <div className="coming">
+        <b>Login connected</b>
+
+        <span>
+          Real module functionality next
+        </span>
+      </div>
+    </section>
+  );
 }
 
 export default App;
